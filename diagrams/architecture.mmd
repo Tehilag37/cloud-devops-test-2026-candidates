@@ -1,0 +1,45 @@
+flowchart LR
+    USERS["Survey users"]
+
+    subgraph ONPREM["On-premises environment"]
+        ADO["Azure DevOps Server 2022<br/>Git, PRs and CI/CD"]
+    end
+
+    subgraph GCP["GCP Production Project - me-west1"]
+        AGENT["Ubuntu self-hosted agent<br/>Attached service account"]
+        AR["Artifact Registry<br/>Immutable image versions"]
+
+        LB["HTTPS Load Balancer"]
+
+        subgraph GKE["Regional GKE Standard<br/>Worker nodes across multiple zones"]
+            K8SAPI["Private Kubernetes API"]
+            FRONTEND["Frontend Deployment"]
+            API["API Deployment<br/>Multiple replicas<br/>Probes and PDB"]
+            WORKER["Background Worker"]
+        end
+
+        SQL["Cloud SQL PostgreSQL<br/>Private IP<br/>Regional High Availability"]
+        GCS["Private Cloud Storage bucket<br/>7-day Soft Delete"]
+        SM["Secret Manager"]
+    end
+
+    USERS -->|"HTTPS"| LB
+    LB --> FRONTEND
+    LB --> API
+    FRONTEND -->|"Internal API requests"| API
+
+    API --> SQL
+    WORKER --> SQL
+    API --> GCS
+    WORKER --> GCS
+
+    API -.->|"Workload Identity"| SM
+    WORKER -.->|"Workload Identity"| SM
+
+    AGENT -->|"Agent-initiated polling / job status over VPN"| ADO
+    AGENT -->|"Build and push images"| AR
+    AGENT -->|"Deploy through private API"| K8SAPI
+
+    AR -->|"Pull images by digest"| FRONTEND
+    AR -->|"Pull images by digest"| API
+    AR -->|"Pull images by digest"| WORKER
